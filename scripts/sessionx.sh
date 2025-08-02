@@ -10,7 +10,7 @@ source "$CURRENT_DIR/fzf-marks.sh"
 get_sorted_sessions() {
 	last_session=$(tmux display-message -p '#{client_last_session}')
 	sessions=$(tmux list-sessions | sed -E 's/:.*$//' | grep -v "^$last_session$")
-	filtered_sessios=${extra_options["filtered-sessions"]}
+	filtered_sessios=$(tmux_option_or_fallback "@sessionx-filtered-sessions" "")
 	if [[ -n "$filtered_sessios" ]]; then
 	  filtered_and_piped=$(echo "$filtered_sessios" | sed -E 's/,/|/g')
 	  sessions=$(echo "$sessions" | grep -Ev "$filtered_and_piped")
@@ -28,11 +28,11 @@ tmux_option_or_fallback() {
 }
 
 input() {
-	default_window_mode=${extra_options["window-mode"]}
+	default_window_mode=$(tmux_option_or_fallback "@sessionx-window-mode" "off")
 	if [[ "$default_window_mode" == "on" ]]; then
 		tmux list-windows -a -F '#{session_name}:#{window_index} #{window_name}'
 	else
-		filter_current_session=${extra_options["filter-current"]}
+		filter_current_session=$(tmux_option_or_fallback "@sessionx-filter-current" "true")
 		if [[ "$filter_current_session" == "true" ]]; then
 			(get_sorted_sessions | grep -v "$CURRENT$") || echo "$CURRENT"
 		else
@@ -43,8 +43,8 @@ input() {
 
 additional_input() {
 	sessions=$(get_sorted_sessions)
-	custom_paths=${extra_options["custom-paths"]}
-	custom_path_subdirectories=${extra_options["custom-paths-subdirectories"]}
+	custom_paths=$(tmux_option_or_fallback "@sessionx-custom-paths" "")
+	custom_path_subdirectories=$(tmux_option_or_fallback "@sessionx-custom-paths-subdirectories" "false")
 	if [[ -z "$custom_paths" ]]; then
 		echo ""
 	else
@@ -119,13 +119,16 @@ handle_input() {
 	if [[ -n $ADDITIONAL_INPUT ]]; then
 		INPUT="$(additional_input)\n$INPUT"
 	fi
-	bind_back=${extra_options["bind-back"]}
+	bind_back=$(tmux_option_or_fallback "@sessionx-bind-back" "ctrl-b")
 	BACK="$bind_back:reload(echo -e \"${INPUT// /}\")+change-preview(${TMUX_PLUGIN_MANAGER_PATH%/}/tmux-sessionx/scripts/preview.sh {1})"
 }
 
 run_plugin() {
 	eval $(tmux show-option -gqv @sessionx-_built-args)
 	eval $(tmux show-option -gqv @sessionx-_built-extra-options)
+	
+	FZF_BUILTIN_TMUX=$(tmux_option_or_fallback "@sessionx-fzf-builtin-tmux" "off")
+	
 	handle_input
 	args+=(--bind "$BACK")
 
